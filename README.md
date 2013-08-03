@@ -79,7 +79,7 @@ go func() {
 
 [![Build Status](https://travis-ci.org/andreaskoch/go-fswatch.png?branch=master)](https://travis-ci.org/andreaskoch/go-fswatch)
 
-## Contribe
+## Contribute
 
 If you have an idea
 
