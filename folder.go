@@ -7,21 +7,24 @@ package fswatch
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"time"
 )
 
 type FolderChange struct {
-	timeStamp  time.Time
-	newItems   []string
-	movedItems []string
+	timeStamp     time.Time
+	newItems      []string
+	movedItems    []string
+	modifiedItems []string
 }
 
-func newFolderChange(newItems []string, movedItems []string) *FolderChange {
+func newFolderChange(newItems, movedItems, modifiedItems []string) *FolderChange {
 	return &FolderChange{
-		timeStamp:  time.Now(),
-		newItems:   newItems,
-		movedItems: movedItems,
+		timeStamp:     time.Now(),
+		newItems:      newItems,
+		movedItems:    movedItems,
+		modifiedItems: modifiedItems,
 	}
 }
 
@@ -72,52 +75,68 @@ func (folderWatcher *FolderWatcher) String() string {
 
 func (folderWatcher *FolderWatcher) Start() *FolderWatcher {
 	folderWatcher.running = true
-	sleepTime := time.Second * 2
+	sleepInterval := time.Second * 2
 
 	go func() {
 
 		// get existing entries
 		directory := folderWatcher.folder
-		existingEntries := getFolderEntries(directory, folderWatcher.recurse, folderWatcher.skipFile)
+		entryList := getFolderEntries(directory, folderWatcher.recurse, folderWatcher.skipFile)
 
 		for folderWatcher.IsRunning() {
 
 			// get new entries
-			newEntries := getFolderEntries(directory, folderWatcher.recurse, folderWatcher.skipFile)
+			updatedEntryList := getFolderEntries(directory, folderWatcher.recurse, folderWatcher.skipFile)
 
 			// check for new items
 			newItems := make([]string, 0)
-			for _, newEntry := range newEntries {
-				isNewItem := !sliceContainsElement(existingEntries, newEntry)
-				if isNewItem {
-					newItems = append(newItems, newEntry)
+			modifiedItems := make([]string, 0)
+
+			for _, entry := range updatedEntryList {
+
+				if isNewItem := !sliceContainsElement(entryList, entry); isNewItem {
+					// entry is new
+					newItems = append(newItems, entry)
+					continue
+				}
+
+				// check if the file changed
+				if fileInfo, err := os.Stat(entry); err == nil {
+
+					// check if file has been modified
+					timeOfLastCheck := time.Now().Add(sleepInterval * -1)
+					if fileHasChanged(fileInfo, timeOfLastCheck) {
+
+						// existing entry has been modified
+						modifiedItems = append(modifiedItems, entry)
+					}
+
 				}
 			}
 
 			// check for moved items
 			movedItems := make([]string, 0)
-			for _, existingEntry := range existingEntries {
-				isMoved := !sliceContainsElement(newEntries, existingEntry)
+			for _, entry := range entryList {
+				isMoved := !sliceContainsElement(updatedEntryList, entry)
 				if isMoved {
-					movedItems = append(movedItems, existingEntry)
+					movedItems = append(movedItems, entry)
 				}
 			}
 
 			// assign the new list
-			existingEntries = newEntries
+			entryList = updatedEntryList
 
 			// sleep
-			time.Sleep(sleepTime)
+			time.Sleep(sleepInterval)
 
 			// check if something happened
-			if len(newItems) > 0 || len(movedItems) > 0 {
+			if len(newItems) > 0 || len(movedItems) > 0 || len(modifiedItems) > 0 {
 
 				// send out change
 				go func() {
-					folderWatcher.Change <- newFolderChange(newItems, movedItems)
+					folderWatcher.Change <- newFolderChange(newItems, movedItems, modifiedItems)
 				}()
 			}
-
 		}
 
 		go func() {
