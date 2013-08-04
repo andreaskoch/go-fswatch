@@ -38,7 +38,7 @@ func (fileWatcher *FileWatcher) SetFile(filePath string) {
 
 func (fileWatcher *FileWatcher) Start() *FileWatcher {
 	fileWatcher.running = true
-	sleepTime := time.Second * 2
+	sleepInterval := time.Second * 2
 
 	go func() {
 
@@ -47,9 +47,8 @@ func (fileWatcher *FileWatcher) Start() *FileWatcher {
 			if fileInfo, err := os.Stat(fileWatcher.file); err == nil {
 
 				// check if file has been modified
-				sleepTime := time.Now().Add(sleepTime * -1)
-				modTime := fileInfo.ModTime()
-				if sleepTime.Before(modTime) {
+				timeOfLastCheck := time.Now().Add(sleepInterval * -1)
+				if fileHasChanged(fileInfo, timeOfLastCheck) {
 
 					// send out the notification
 					fileWatcher.log("Item was modified")
@@ -70,7 +69,7 @@ func (fileWatcher *FileWatcher) Start() *FileWatcher {
 				fileWatcher.Stop()
 			}
 
-			time.Sleep(sleepTime)
+			time.Sleep(sleepInterval)
 
 		}
 
@@ -96,4 +95,13 @@ func (fileWatcher *FileWatcher) log(message string) *FileWatcher {
 	}
 
 	return fileWatcher
+}
+
+func fileHasChanged(fileInfo os.FileInfo, lastCheckTime time.Time) bool {
+	modTime := fileInfo.ModTime()
+	if lastCheckTime.Before(modTime) {
+		return true
+	}
+
+	return false
 }
