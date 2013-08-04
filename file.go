@@ -13,6 +13,7 @@ import (
 type FileWatcher struct {
 	Modified chan bool
 	Moved    chan bool
+	Stopped  chan bool
 
 	debug   bool
 	file    string
@@ -23,6 +24,7 @@ func NewFileWatcher(filePath string) *FileWatcher {
 	return &FileWatcher{
 		Modified: make(chan bool),
 		Moved:    make(chan bool),
+		Stopped:  make(chan bool),
 		debug:    false,
 		file:     filePath,
 	}
@@ -72,6 +74,10 @@ func (fileWatcher *FileWatcher) Start() *FileWatcher {
 			time.Sleep(sleepInterval)
 
 		}
+
+		go func() {
+			fileWatcher.Stopped <- true
+		}()
 
 		fileWatcher.log("Stopped")
 	}()
