@@ -4,11 +4,27 @@
 
 package fswatch
 
-func sliceContainsElement(list []string, elem string) bool {
-	for _, t := range list {
-		if t == elem {
-			return true
-		}
+import (
+	"crypto/sha1"
+	"fmt"
+	"io/ioutil"
+	"os"
+)
+
+func getHashFromFile(path string) (string, error) {
+
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
 	}
-	return false
+
+	bytes, err := ioutil.ReadAll(file)
+	if err != nil {
+		return "", err
+	}
+
+	sha1 := sha1.New()
+	sha1.Write(bytes)
+
+	return fmt.Sprintf("%x", string(sha1.Sum(nil)[0:8])), nil
 }
