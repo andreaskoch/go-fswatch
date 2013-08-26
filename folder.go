@@ -7,6 +7,7 @@ package fswatch
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"time"
 )
@@ -91,21 +92,24 @@ func (folderWatcher *FolderWatcher) Start() *FolderWatcher {
 			newItems := make([]string, 0)
 			modifiedItems := make([]string, 0)
 
-			for entry, hash := range updatedEntryList {
+			for _, entry := range updatedEntryList {
 
-				// check for new entries
-				if _, exists := entryList[entry]; !exists {
-
+				if isNewItem := !sliceContainsElement(entryList, entry); isNewItem {
 					// entry is new
 					newItems = append(newItems, entry)
 					continue
 				}
 
 				// check if the file changed
-				if oldHash := entryList[entry]; oldHash != hash {
+				if fileInfo, err := os.Stat(entry); err == nil {
 
-					// existing entry has been modified
-					modifiedItems = append(modifiedItems, entry)
+					// check if file has been modified
+					timeOfLastCheck := time.Now().Add(sleepInterval * -1)
+					if fileHasChanged(fileInfo, timeOfLastCheck) {
+
+						// existing entry has been modified
+						modifiedItems = append(modifiedItems, entry)
+					}
 
 				}
 			}
@@ -113,7 +117,8 @@ func (folderWatcher *FolderWatcher) Start() *FolderWatcher {
 			// check for moved items
 			movedItems := make([]string, 0)
 			for _, entry := range entryList {
-				if _, exists := updatedEntryList[entry]; !exists {
+				isMoved := !sliceContainsElement(updatedEntryList, entry)
+				if isMoved {
 					movedItems = append(movedItems, entry)
 				}
 			}
@@ -162,10 +167,10 @@ func (folderWatcher *FolderWatcher) log(message string) *FolderWatcher {
 	return folderWatcher
 }
 
-func getFolderEntries(directory string, recurse bool, skipFile func(path string) bool) map[string]string {
+func getFolderEntries(directory string, recurse bool, skipFile func(path string) bool) []string {
 
 	// the return array
-	entries := make(map[string]string)
+	entries := make([]string, 0)
 
 	// read the entries of the specified directory
 	directoryEntries, err := ioutil.ReadDir(directory)
@@ -188,16 +193,12 @@ func getFolderEntries(directory string, recurse bool, skipFile func(path string)
 
 			// recurse
 			subFolderEntries := getFolderEntries(subEntryPath, recurse, skipFile)
-			for filepath, hash := range subFolderEntries {
-				entries[filepath] = hash
-			}
+			entries = append(entries, subFolderEntries...)
 
 		} else {
 
 			// append entry
-			if hash, err := getHashFromFile(subEntryPath); err == nil {
-				entries[subEntryPath] = hash
-			}
+			entries = append(entries, subEntryPath)
 		}
 
 	}

@@ -15,23 +15,16 @@ type FileWatcher struct {
 	Moved    chan bool
 	Stopped  chan bool
 
-	hash    string
 	debug   bool
 	file    string
 	running bool
 }
 
 func NewFileWatcher(filePath string) *FileWatcher {
-	hash, err := getHashFromFile(filePath)
-	if err != nil {
-		return nil
-	}
-
 	return &FileWatcher{
 		Modified: make(chan bool),
 		Moved:    make(chan bool),
 		Stopped:  make(chan bool),
-		hash:     hash,
 		debug:    false,
 		file:     filePath,
 	}
@@ -53,17 +46,14 @@ func (fileWatcher *FileWatcher) Start() *FileWatcher {
 
 		for fileWatcher.running {
 
-			if newHash, err := getHashFromFile(fileWatcher.file); err == nil {
+			if fileInfo, err := os.Stat(fileWatcher.file); err == nil {
 
 				// check if file has been modified
-				if newHash != fileWatcher.hash {
-
-					fileWatcher.log("Item was modified")
-
-					// save the new hash
-					fileWatcher.hash = newHash
+				timeOfLastCheck := time.Now().Add(sleepInterval * -1)
+				if fileHasChanged(fileInfo, timeOfLastCheck) {
 
 					// send out the notification
+					fileWatcher.log("Item was modified")
 					go func() {
 						fileWatcher.Modified <- true
 					}()
@@ -111,4 +101,13 @@ func (fileWatcher *FileWatcher) log(message string) *FileWatcher {
 	}
 
 	return fileWatcher
+}
+
+func fileHasChanged(fileInfo os.FileInfo, lastCheckTime time.Time) bool {
+	modTime := fileInfo.ModTime()
+	if lastCheckTime.Before(modTime) {
+		return true
+	}
+
+	return false
 }
