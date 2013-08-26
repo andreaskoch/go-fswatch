@@ -112,7 +112,7 @@ func (folderWatcher *FolderWatcher) Start() *FolderWatcher {
 
 			// check for moved items
 			movedItems := make([]string, 0)
-			for entry, _ := range entryList {
+			for _, entry := range entryList {
 				if _, exists := updatedEntryList[entry]; !exists {
 					movedItems = append(movedItems, entry)
 				}
@@ -120,6 +120,9 @@ func (folderWatcher *FolderWatcher) Start() *FolderWatcher {
 
 			// assign the new list
 			entryList = updatedEntryList
+
+			// sleep
+			time.Sleep(sleepInterval)
 
 			// check if something happened
 			if len(newItems) > 0 || len(movedItems) > 0 || len(modifiedItems) > 0 {
@@ -129,9 +132,6 @@ func (folderWatcher *FolderWatcher) Start() *FolderWatcher {
 					folderWatcher.Change <- newFolderChange(newItems, movedItems, modifiedItems)
 				}()
 			}
-
-			// sleep
-			time.Sleep(sleepInterval)
 		}
 
 		go func() {
@@ -178,30 +178,26 @@ func getFolderEntries(directory string, recurse bool, skipFile func(path string)
 		// get the full path
 		subEntryPath := filepath.Join(directory, entry.Name())
 
-		// recurse or append
-		if entry.IsDir() {
-
-			// recurse
-			if recurse {
-
-				subFolderEntries := getFolderEntries(subEntryPath, recurse, skipFile)
-				for filepath, hash := range subFolderEntries {
-					entries[filepath] = hash
-				}
-
-			}
-
-			continue
-		}
-
 		// check if the enty shall be ignored
 		if skipFile(subEntryPath) {
 			continue
 		}
 
-		// append file entry
-		if hash, err := getHashFromFile(subEntryPath); err == nil {
-			entries[subEntryPath] = hash
+		// recurse or append
+		if recurse && entry.IsDir() {
+
+			// recurse
+			subFolderEntries := getFolderEntries(subEntryPath, recurse, skipFile)
+			for filepath, hash := range subFolderEntries {
+				entries[filepath] = hash
+			}
+
+		} else {
+
+			// append entry
+			if hash, err := getHashFromFile(subEntryPath); err == nil {
+				entries[subEntryPath] = hash
+			}
 		}
 
 	}

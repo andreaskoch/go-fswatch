@@ -18,8 +18,6 @@ func getHashFromFile(path string) (string, error) {
 		return "", err
 	}
 
-	defer file.Close()
-
 	bytes, err := ioutil.ReadAll(file)
 	if err != nil {
 		return "", err
