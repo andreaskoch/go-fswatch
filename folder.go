@@ -183,11 +183,6 @@ func getFolderEntries(directory string, recurse bool, skipFile func(path string)
 		// get the full path
 		subEntryPath := filepath.Join(directory, entry.Name())
 
-		// check if the enty shall be ignored
-		if skipFile(subEntryPath) {
-			continue
-		}
-
 		// recurse or append
 		if recurse && entry.IsDir() {
 
@@ -196,6 +191,11 @@ func getFolderEntries(directory string, recurse bool, skipFile func(path string)
 			entries = append(entries, subFolderEntries...)
 
 		} else {
+
+			// check if the enty shall be ignored
+			if skipFile(subEntryPath) {
+				continue
+			}
 
 			// append entry
 			entries = append(entries, subEntryPath)
