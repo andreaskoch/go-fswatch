@@ -44,6 +44,10 @@ func (folderChange *FolderChange) Moved() []string {
 	return folderChange.movedItems
 }
 
+func (folderChange *FolderChange) Modified() []string {
+     return folderChange.modifiedItems
+}
+
 type FolderWatcher struct {
 	Change  chan *FolderChange
 	Stopped chan bool
