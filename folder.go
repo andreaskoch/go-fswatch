@@ -45,7 +45,7 @@ func (folderChange *FolderChange) Moved() []string {
 }
 
 func (folderChange *FolderChange) Modified() []string {
-     return folderChange.modifiedItems
+	return folderChange.modifiedItems
 }
 
 type FolderWatcher struct {
@@ -55,12 +55,18 @@ type FolderWatcher struct {
 	recurse  bool
 	skipFile func(path string) bool
 
-	debug   bool
-	folder  string
-	running bool
+	debug         bool
+	folder        string
+	running       bool
+	checkInterval time.Duration
 }
 
-func NewFolderWatcher(folderPath string, recurse bool, skipFile func(path string) bool) *FolderWatcher {
+func NewFolderWatcher(folderPath string, recurse bool, skipFile func(path string) bool, checkIntervalInSeconds int) *FolderWatcher {
+
+	if checkIntervalInSeconds < 1 {
+		panic(fmt.Sprintf("Cannot create a folder watcher with a check interval of %v seconds.", checkIntervalInSeconds))
+	}
+
 	return &FolderWatcher{
 		Change:  make(chan *FolderChange),
 		Stopped: make(chan bool),
@@ -68,8 +74,9 @@ func NewFolderWatcher(folderPath string, recurse bool, skipFile func(path string
 		recurse:  recurse,
 		skipFile: skipFile,
 
-		debug:  false,
-		folder: folderPath,
+		debug:         false,
+		folder:        folderPath,
+		checkInterval: time.Duration(checkIntervalInSeconds),
 	}
 }
 
@@ -79,7 +86,7 @@ func (folderWatcher *FolderWatcher) String() string {
 
 func (folderWatcher *FolderWatcher) Start() *FolderWatcher {
 	folderWatcher.running = true
-	sleepInterval := time.Second * 2
+	sleepInterval := time.Second * folderWatcher.checkInterval
 
 	go func() {
 

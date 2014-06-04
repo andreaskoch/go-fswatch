@@ -15,18 +15,26 @@ type FileWatcher struct {
 	Moved    chan bool
 	Stopped  chan bool
 
-	debug   bool
-	file    string
-	running bool
+	debug         bool
+	file          string
+	running       bool
+	checkInterval time.Duration
 }
 
-func NewFileWatcher(filePath string) *FileWatcher {
+func NewFileWatcher(filePath string, checkIntervalInSeconds int) *FileWatcher {
+
+	if checkIntervalInSeconds < 1 {
+		panic(fmt.Sprintf("Cannot create a file watcher with a check interval of %v seconds.", checkIntervalInSeconds))
+	}
+
 	return &FileWatcher{
 		Modified: make(chan bool),
 		Moved:    make(chan bool),
 		Stopped:  make(chan bool),
-		debug:    false,
-		file:     filePath,
+
+		debug:         false,
+		file:          filePath,
+		checkInterval: time.Duration(checkIntervalInSeconds),
 	}
 }
 
@@ -40,7 +48,7 @@ func (fileWatcher *FileWatcher) SetFile(filePath string) {
 
 func (fileWatcher *FileWatcher) Start() *FileWatcher {
 	fileWatcher.running = true
-	sleepInterval := time.Second * 2
+	sleepInterval := time.Second * fileWatcher.checkInterval
 
 	go func() {
 
