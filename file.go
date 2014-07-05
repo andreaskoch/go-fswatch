@@ -10,10 +10,20 @@ import (
 	"time"
 )
 
+var numberOfFileWatchers int
+
+func init() {
+	numberOfFolderWatchers = 0
+}
+
+func NumberOfFileWatchers() int {
+	return numberOfFileWatchers
+}
+
 type FileWatcher struct {
-	Modified chan bool
-	Moved    chan bool
-	Stopped  chan bool
+	modified chan bool
+	moved    chan bool
+	stopped  chan bool
 
 	debug         bool
 	file          string
@@ -28,9 +38,9 @@ func NewFileWatcher(filePath string, checkIntervalInSeconds int) *FileWatcher {
 	}
 
 	return &FileWatcher{
-		Modified: make(chan bool),
-		Moved:    make(chan bool),
-		Stopped:  make(chan bool),
+		modified: make(chan bool),
+		moved:    make(chan bool),
+		stopped:  make(chan bool),
 
 		debug:         false,
 		file:          filePath,
@@ -46,11 +56,25 @@ func (fileWatcher *FileWatcher) SetFile(filePath string) {
 	fileWatcher.file = filePath
 }
 
-func (fileWatcher *FileWatcher) Start() *FileWatcher {
+func (filewatcher *FileWatcher) Modified() chan bool {
+	return filewatcher.modified
+}
+
+func (filewatcher *FileWatcher) Moved() chan bool {
+	return filewatcher.moved
+}
+
+func (filewatcher *FileWatcher) Stopped() chan bool {
+	return filewatcher.stopped
+}
+
+func (fileWatcher *FileWatcher) Start() {
 	fileWatcher.running = true
 	sleepInterval := time.Second * fileWatcher.checkInterval
 
 	go func() {
+
+		numberOfFileWatchers++
 
 		for fileWatcher.running {
 
@@ -63,7 +87,7 @@ func (fileWatcher *FileWatcher) Start() *FileWatcher {
 					// send out the notification
 					fileWatcher.log("Item was modified")
 					go func() {
-						fileWatcher.Modified <- true
+						fileWatcher.modified <- true
 					}()
 				}
 
@@ -72,7 +96,7 @@ func (fileWatcher *FileWatcher) Start() *FileWatcher {
 				// send out the notification
 				fileWatcher.log("Item was removed")
 				go func() {
-					fileWatcher.Moved <- true
+					fileWatcher.moved <- true
 				}()
 
 				// stop this file watcher
@@ -84,19 +108,17 @@ func (fileWatcher *FileWatcher) Start() *FileWatcher {
 		}
 
 		go func() {
-			fileWatcher.Stopped <- true
+			fileWatcher.stopped <- true
 		}()
 
+		numberOfFileWatchers--
 		fileWatcher.log("Stopped")
 	}()
-
-	return fileWatcher
 }
 
-func (fileWatcher *FileWatcher) Stop() *FileWatcher {
+func (fileWatcher *FileWatcher) Stop() {
 	fileWatcher.log("Stopping")
 	fileWatcher.running = false
-	return fileWatcher
 }
 
 func (fileWatcher *FileWatcher) IsRunning() bool {

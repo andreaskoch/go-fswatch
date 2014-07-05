@@ -12,45 +12,22 @@ import (
 	"time"
 )
 
-type FolderChange struct {
-	timeStamp     time.Time
-	newItems      []string
-	movedItems    []string
-	modifiedItems []string
+var numberOfFolderWatchers int
+
+func init() {
+	numberOfFolderWatchers = 0
 }
 
-func newFolderChange(newItems, movedItems, modifiedItems []string) *FolderChange {
-	return &FolderChange{
-		timeStamp:     time.Now(),
-		newItems:      newItems,
-		movedItems:    movedItems,
-		modifiedItems: modifiedItems,
-	}
-}
-
-func (folderChange *FolderChange) String() string {
-	return fmt.Sprintf("Folderchange (timestamp: %s, new: %d, moved: %d)", folderChange.timeStamp, len(folderChange.New()), len(folderChange.Moved()))
-}
-
-func (folderChange *FolderChange) TimeStamp() time.Time {
-	return folderChange.timeStamp
-}
-
-func (folderChange *FolderChange) New() []string {
-	return folderChange.newItems
-}
-
-func (folderChange *FolderChange) Moved() []string {
-	return folderChange.movedItems
-}
-
-func (folderChange *FolderChange) Modified() []string {
-	return folderChange.modifiedItems
+func NumberOfFolderWatchers() int {
+	return numberOfFolderWatchers
 }
 
 type FolderWatcher struct {
-	Change  chan *FolderChange
-	Stopped chan bool
+	changeDetails chan *FolderChange
+
+	modified chan bool
+	moved    chan bool
+	stopped  chan bool
 
 	recurse  bool
 	skipFile func(path string) bool
@@ -68,8 +45,12 @@ func NewFolderWatcher(folderPath string, recurse bool, skipFile func(path string
 	}
 
 	return &FolderWatcher{
-		Change:  make(chan *FolderChange),
-		Stopped: make(chan bool),
+
+		modified: make(chan bool),
+		moved:    make(chan bool),
+		stopped:  make(chan bool),
+
+		changeDetails: make(chan *FolderChange),
 
 		recurse:  recurse,
 		skipFile: skipFile,
@@ -84,7 +65,23 @@ func (folderWatcher *FolderWatcher) String() string {
 	return fmt.Sprintf("Folderwatcher %q", folderWatcher.folder)
 }
 
-func (folderWatcher *FolderWatcher) Start() *FolderWatcher {
+func (folderWatcher *FolderWatcher) Modified() chan bool {
+	return folderWatcher.modified
+}
+
+func (folderWatcher *FolderWatcher) Moved() chan bool {
+	return folderWatcher.moved
+}
+
+func (folderWatcher *FolderWatcher) Stopped() chan bool {
+	return folderWatcher.stopped
+}
+
+func (folderWatcher *FolderWatcher) ChangeDetails() chan *FolderChange {
+	return folderWatcher.changeDetails
+}
+
+func (folderWatcher *FolderWatcher) Start() {
 	folderWatcher.running = true
 	sleepInterval := time.Second * folderWatcher.checkInterval
 
@@ -92,12 +89,20 @@ func (folderWatcher *FolderWatcher) Start() *FolderWatcher {
 
 		// get existing entries
 		directory := folderWatcher.folder
-		entryList := getFolderEntries(directory, folderWatcher.recurse, folderWatcher.skipFile)
+		entryList, err := getFolderEntries(directory, folderWatcher.recurse, folderWatcher.skipFile)
+		if err != nil {
+			// the folder does no longer exist or is not accessible
+			go func() {
+				folderWatcher.moved <- true
+			}()
+		}
+
+		numberOfFolderWatchers++
 
 		for folderWatcher.IsRunning() {
 
 			// get new entries
-			updatedEntryList := getFolderEntries(directory, folderWatcher.recurse, folderWatcher.skipFile)
+			updatedEntryList, _ := getFolderEntries(directory, folderWatcher.recurse, folderWatcher.skipFile)
 
 			// check for new items
 			newItems := make([]string, 0)
@@ -145,25 +150,24 @@ func (folderWatcher *FolderWatcher) Start() *FolderWatcher {
 
 				// send out change
 				go func() {
-					folderWatcher.Change <- newFolderChange(newItems, movedItems, modifiedItems)
+					folderWatcher.modified <- true
+					folderWatcher.changeDetails <- newFolderChange(newItems, movedItems, modifiedItems)
 				}()
 			}
 		}
 
 		go func() {
-			folderWatcher.Stopped <- true
+			folderWatcher.stopped <- true
 		}()
 
+		numberOfFolderWatchers--
 		folderWatcher.log("Stopped")
 	}()
-
-	return folderWatcher
 }
 
-func (folderWatcher *FolderWatcher) Stop() *FolderWatcher {
+func (folderWatcher *FolderWatcher) Stop() {
 	folderWatcher.log("Stopping")
 	folderWatcher.running = false
-	return folderWatcher
 }
 
 func (folderWatcher *FolderWatcher) IsRunning() bool {
@@ -178,7 +182,7 @@ func (folderWatcher *FolderWatcher) log(message string) *FolderWatcher {
 	return folderWatcher
 }
 
-func getFolderEntries(directory string, recurse bool, skipFile func(path string) bool) []string {
+func getFolderEntries(directory string, recurse bool, skipFile func(path string) bool) ([]string, error) {
 
 	// the return array
 	entries := make([]string, 0)
@@ -186,7 +190,7 @@ func getFolderEntries(directory string, recurse bool, skipFile func(path string)
 	// read the entries of the specified directory
 	directoryEntries, err := ioutil.ReadDir(directory)
 	if err != nil {
-		return entries
+		return entries, err
 	}
 
 	for _, entry := range directoryEntries {
@@ -197,8 +201,8 @@ func getFolderEntries(directory string, recurse bool, skipFile func(path string)
 		// recurse or append
 		if recurse && entry.IsDir() {
 
-			// recurse
-			subFolderEntries := getFolderEntries(subEntryPath, recurse, skipFile)
+			// recurse (ignore errors, unreadable sub directories don't hurt much)
+			subFolderEntries, _ := getFolderEntries(subEntryPath, recurse, skipFile)
 			entries = append(entries, subFolderEntries...)
 
 		} else {
@@ -214,5 +218,5 @@ func getFolderEntries(directory string, recurse bool, skipFile func(path string)
 
 	}
 
-	return entries
+	return entries, nil
 }
