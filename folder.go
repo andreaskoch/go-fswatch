@@ -151,6 +151,9 @@ func (folderWatcher *FolderWatcher) Start() {
 				// send out change
 				go func() {
 					folderWatcher.modified <- true
+				}()
+
+				go func() {
 					folderWatcher.changeDetails <- newFolderChange(newItems, movedItems, modifiedItems)
 				}()
 			}
