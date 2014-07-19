@@ -55,7 +55,7 @@ func NewFolderWatcher(folderPath string, recurse bool, skipFile func(path string
 		recurse:  recurse,
 		skipFile: skipFile,
 
-		debug:         false,
+		debug:         true,
 		folder:        folderPath,
 		checkInterval: time.Duration(checkIntervalInSeconds),
 	}
@@ -154,8 +154,11 @@ func (folderWatcher *FolderWatcher) Start() {
 				}()
 
 				go func() {
+					log("Folder %q changed", directory)
 					folderWatcher.changeDetails <- newFolderChange(newItems, movedItems, modifiedItems)
 				}()
+			} else {
+				log("No change in folder %q", directory)
 			}
 		}
 
@@ -164,25 +167,17 @@ func (folderWatcher *FolderWatcher) Start() {
 		}()
 
 		numberOfFolderWatchers--
-		folderWatcher.log("Stopped")
+		log("Stopped folder watcher %q", folderWatcher.String())
 	}()
 }
 
 func (folderWatcher *FolderWatcher) Stop() {
-	folderWatcher.log("Stopping")
+	log("Stopping folder watcher %q", folderWatcher.String())
 	folderWatcher.running = false
 }
 
 func (folderWatcher *FolderWatcher) IsRunning() bool {
 	return folderWatcher.running
-}
-
-func (folderWatcher *FolderWatcher) log(message string) *FolderWatcher {
-	if folderWatcher.debug {
-		fmt.Printf("%s - %s\n", folderWatcher, message)
-	}
-
-	return folderWatcher
 }
 
 func getFolderEntries(directory string, recurse bool, skipFile func(path string) bool) ([]string, error) {

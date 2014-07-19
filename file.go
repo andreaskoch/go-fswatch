@@ -25,7 +25,6 @@ type FileWatcher struct {
 	moved    chan bool
 	stopped  chan bool
 
-	debug         bool
 	file          string
 	running       bool
 	checkInterval time.Duration
@@ -42,7 +41,6 @@ func NewFileWatcher(filePath string, checkIntervalInSeconds int) *FileWatcher {
 		moved:    make(chan bool),
 		stopped:  make(chan bool),
 
-		debug:         false,
 		file:          filePath,
 		checkInterval: time.Duration(checkIntervalInSeconds),
 	}
@@ -85,16 +83,18 @@ func (fileWatcher *FileWatcher) Start() {
 				if fileHasChanged(fileInfo, timeOfLastCheck) {
 
 					// send out the notification
-					fileWatcher.log("Item was modified")
+					log("File %q has been modified.", fileWatcher.file)
 					go func() {
 						fileWatcher.modified <- true
 					}()
+				} else {
+					log("File %q has not changed.", fileWatcher.file)
 				}
 
 			} else if os.IsNotExist(err) {
 
 				// send out the notification
-				fileWatcher.log("Item was removed")
+				log("File %q has been moved.", fileWatcher.file)
 				go func() {
 					fileWatcher.moved <- true
 				}()
@@ -112,25 +112,17 @@ func (fileWatcher *FileWatcher) Start() {
 		}()
 
 		numberOfFileWatchers--
-		fileWatcher.log("Stopped")
+		log("Stopped file watcher %q", fileWatcher.String())
 	}()
 }
 
 func (fileWatcher *FileWatcher) Stop() {
-	fileWatcher.log("Stopping")
+	log("Stopping file watcher %q", fileWatcher.String())
 	fileWatcher.running = false
 }
 
 func (fileWatcher *FileWatcher) IsRunning() bool {
 	return fileWatcher.running
-}
-
-func (fileWatcher *FileWatcher) log(message string) *FileWatcher {
-	if fileWatcher.debug {
-		fmt.Printf("%s - %s\n", fileWatcher, message)
-	}
-
-	return fileWatcher
 }
 
 func fileHasChanged(fileInfo os.FileInfo, lastCheckTime time.Time) bool {
