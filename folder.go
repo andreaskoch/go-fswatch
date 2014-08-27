@@ -7,7 +7,6 @@ package fswatch
 import (
 	"fmt"
 	"io/ioutil"
-	"os"
 	"path/filepath"
 	"time"
 )
@@ -36,6 +35,8 @@ type FolderWatcher struct {
 	folder        string
 	running       bool
 	checkInterval time.Duration
+
+	previousEntries []string
 }
 
 func NewFolderWatcher(folderPath string, recurse bool, skipFile func(path string) bool, checkIntervalInSeconds int) *FolderWatcher {
@@ -88,15 +89,31 @@ func (folderWatcher *FolderWatcher) Start() {
 	go func() {
 
 		// get existing entries
+		var entryList []string
 		directory := folderWatcher.folder
-		entryList, err := getFolderEntries(directory, folderWatcher.recurse, folderWatcher.skipFile)
-		if err != nil {
-			// the folder does no longer exist or is not accessible
-			go func() {
-				folderWatcher.moved <- true
-			}()
+
+		previousEntryList := folderWatcher.getPreviousEntryList()
+
+		if previousEntryList != nil {
+
+			// use the entry list from a previous run
+			entryList = previousEntryList
+
+		} else {
+
+			// use a new entry list
+			newEntryList, err := getFolderEntries(directory, folderWatcher.recurse, folderWatcher.skipFile)
+			if err != nil {
+				// the folder does no longer exist or is not accessible
+				go func() {
+					folderWatcher.moved <- true
+				}()
+			}
+
+			entryList = newEntryList
 		}
 
+		// increment watcher count
 		numberOfFolderWatchers++
 
 		for folderWatcher.IsRunning() {
@@ -117,11 +134,12 @@ func (folderWatcher *FolderWatcher) Start() {
 				}
 
 				// check if the file changed
-				if fileInfo, err := os.Stat(entry); err == nil {
+				if newModTime, err := getLastModTimeFromFile(entry); err == nil {
 
 					// check if file has been modified
 					timeOfLastCheck := time.Now().Add(sleepInterval * -1)
-					if fileHasChanged(fileInfo, timeOfLastCheck) {
+
+					if timeOfLastCheck.Before(newModTime) {
 
 						// existing entry has been modified
 						modifiedItems = append(modifiedItems, entry)
@@ -162,11 +180,18 @@ func (folderWatcher *FolderWatcher) Start() {
 			}
 		}
 
+		// capture the entry list for a restart
+		folderWatcher.captureEntryList(entryList)
+
+		// inform channel-subscribers
 		go func() {
 			folderWatcher.stopped <- true
 		}()
 
+		// decrement the watch counter
 		numberOfFolderWatchers--
+
+		// final log message
 		log("Stopped folder watcher %q", folderWatcher.String())
 	}()
 }
@@ -178,6 +203,15 @@ func (folderWatcher *FolderWatcher) Stop() {
 
 func (folderWatcher *FolderWatcher) IsRunning() bool {
 	return folderWatcher.running
+}
+
+func (folderWatcher *FolderWatcher) getPreviousEntryList() []string {
+	return folderWatcher.previousEntries
+}
+
+// Remember the entry list for a later restart
+func (folderWatcher *FolderWatcher) captureEntryList(list []string) {
+	folderWatcher.previousEntries = list
 }
 
 func getFolderEntries(directory string, recurse bool, skipFile func(path string) bool) ([]string, error) {
