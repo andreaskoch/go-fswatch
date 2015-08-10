@@ -1,6 +1,6 @@
 # fswatch
 
-fswatch is a go library for watching file system changes to **does not** depend on inotify.
+fswatch is a go library for recursively watching file system changes to **does not** depend on inotify and therefore is not limit by the ulimit of your operating system.
 
 ## Motivation
 
@@ -16,7 +16,8 @@ If you want to watch a single file use the `NewFileWatcher` function to create a
 
 ```go
 go func() {
-	fileWatcher := fswatch.NewFileWatcher("Some-file").Start()
+	checkIntervalInSeconds := 2
+	fileWatcher := fswatch.NewFileWatcher("Some-file", checkIntervalInSeconds).Start()
 
 	for fileWatcher.IsRunning() {
 
@@ -40,40 +41,66 @@ go func() {
 
 ### Watching a folder
 
-To watch a whole folder for new, modified or deleted files you can use the `NewFolderWatcher` function.
+To watch a whole folder (and all of its child directories) for new, modified or deleted files you can use the `NewFolderWatcher` function.
 
 Parameters:
 
-1. The directory path
+1. The path to the directory you want to monitor
 2. A flag indicating whether the folder shall be watched recursively
 3. An expression which decides which files are skipped
+4. The check interval in seconds (1 - n seconds)
 
 
 ```go
 go func() {
 
-	recurse := true
+	recurse := true // include all sub directories
 
-	skipNoFile := func(path string) bool {
-		return false
-	}	
+	skipDotFilesAndFolders := func(path string) bool {
+		return strings.HasPrefix(filepath.Base(path), ".")
+	}
 
-	folderWatcher := fswatch.NewFolderWatcher("some-directory", recurse, skipNoFile).Start()
+	checkIntervalInSeconds := 2
+
+	folderWatcher := fswatch.NewFolderWatcher(
+		"some-directory",
+		recurse,
+		skipDotFilesAndFolders,
+		checkIntervalInSeconds
+	).Start()
 
 	for folderWatcher.IsRunning() {
 
 		select {
-		case <-folderWatcher.Change:
 
-			go func() {
-				// some file changed, was added, moved or deleted.
-			}()
+		case <-folderWatcher.New():
+			fmt.Println("New items detected")
+
+		case <-folderWatcher.Modified():
+			fmt.Println("Modified items detected")
+
+		case <-folderWatcher.Moved():
+			fmt.Println("Items have been moved")
+
+		case changes := <-folderWatcher.ChangeDetails():
+
+			fmt.Printf("%s\n", changes.String())
+			fmt.Printf("New: %#v\n", changes.New())
+			fmt.Printf("Modified: %#v\n", changes.Modified())
+			fmt.Printf("Moved: %#v\n", changes.Moved())
 
 		}
 	}
 
 }()
 ```
+## go-fswatch in action
+
+You can see go-fswatch in action in the **live-reload** feature of my [markdown webserver "allmark"](https://allmark.io/).
+
+See:  [github.com/andreaskoch/allmark/blob/master/src/allmark.io/modules/dataaccess/filesystem/watcher.go](https://github.com/andreaskoch/allmark/blob/master/src/allmark.io/modules/dataaccess/filesystem/watcher.go)
+
+I would still prefer using inotify, but go-fswatch has been doing it's job in allmark pretty well and works easily with relatively large folder structures.
 
 ## Build Status
 
@@ -81,10 +108,10 @@ go func() {
 
 ## Contribute
 
-If you have an idea
+All contributions are welcome. Especially if you have an idea
 
-- how to reliably increase the limit for the maximum number of open files from within the application
+- how to reliably increase the limit for the maximum number of open files from within an application so we can use inotify for large folder structures.
 - how to overcome the limitations of inotify without having to resort to checking the files for changes over and over again
 - or how to make the existing code more efficient
 
-please send me a message or a pull request. All contributions are welcome.
+please send me a message or a pull request.

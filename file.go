@@ -10,16 +10,19 @@ import (
 	"time"
 )
 
+// numberOfFileWatchers contains the current number of active file watchers.
 var numberOfFileWatchers int
 
 func init() {
 	numberOfFolderWatchers = 0
 }
 
+// NumberOfFileWatchers returns the number of currently active file watchers.
 func NumberOfFileWatchers() int {
 	return numberOfFileWatchers
 }
 
+// A FileWatcher can be used to determine if a given file has been modified or moved.
 type FileWatcher struct {
 	modified chan bool
 	moved    chan bool
@@ -33,6 +36,8 @@ type FileWatcher struct {
 	previousModTime time.Time
 }
 
+// NewFileWatcher creates a new file watcher for a given file path.
+// The check interval in seconds defines how often the watcher shall check for changes  (recommended: 1 - n seconds).
 func NewFileWatcher(filePath string, checkIntervalInSeconds int) *FileWatcher {
 
 	if checkIntervalInSeconds < 1 {
@@ -53,22 +58,27 @@ func (fileWatcher *FileWatcher) String() string {
 	return fmt.Sprintf("Filewatcher %q", fileWatcher.file)
 }
 
+// SetFile sets the file file for this file watcher.
 func (fileWatcher *FileWatcher) SetFile(filePath string) {
 	fileWatcher.file = filePath
 }
 
+// Modified returns a channel indicating if the file has been modified.
 func (filewatcher *FileWatcher) Modified() chan bool {
 	return filewatcher.modified
 }
 
+// Moved returns a channel indicating if the file has been moved.
 func (filewatcher *FileWatcher) Moved() chan bool {
 	return filewatcher.moved
 }
 
+// Stopped returns a channel indicating if the file watcher stopped.
 func (filewatcher *FileWatcher) Stopped() chan bool {
 	return filewatcher.stopped
 }
 
+// Start starts the watch process.
 func (fileWatcher *FileWatcher) Start() {
 	fileWatcher.running = true
 	sleepInterval := time.Second * fileWatcher.checkInterval
@@ -160,15 +170,18 @@ func (fileWatcher *FileWatcher) Start() {
 	}()
 }
 
+// Stop stops the watch process.
 func (fileWatcher *FileWatcher) Stop() {
 	log("Stopping file watcher %q", fileWatcher.String())
 	fileWatcher.wasStopped = true
 }
 
+// IsRunning returns a flag indicating whether the watcher is currently running.
 func (fileWatcher *FileWatcher) IsRunning() bool {
 	return fileWatcher.running
 }
 
+// getPreviousModTime returns the last known modification time of the file.
 func (fileWatcher *FileWatcher) getPreviousModTime() time.Time {
 	return fileWatcher.previousModTime
 }
@@ -178,6 +191,8 @@ func (fileWatcher *FileWatcher) captureModTime(modTime time.Time) {
 	fileWatcher.previousModTime = modTime
 }
 
+// getLastModTimeFromFile returns the last modification time of the file with the given file path.
+// If modifiction time cannot be determined getLastModTimeFromFile will return an error.
 func getLastModTimeFromFile(file string) (time.Time, error) {
 	fileInfo, err := os.Stat(file)
 	if err != nil {
@@ -187,6 +202,7 @@ func getLastModTimeFromFile(file string) (time.Time, error) {
 	return fileInfo.ModTime(), nil
 }
 
+// timeIsSet returns true if the supplied time is set / initialized.
 func timeIsSet(t time.Time) bool {
 	return time.Time{} == t
 }

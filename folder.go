@@ -11,16 +11,19 @@ import (
 	"time"
 )
 
+// numberOfFolderWatchers contains the current number of active folder watchers.
 var numberOfFolderWatchers int
 
 func init() {
 	numberOfFolderWatchers = 0
 }
 
+// NumberOfFolderWatchers returns the number of currently active folder watchers.
 func NumberOfFolderWatchers() int {
 	return numberOfFolderWatchers
 }
 
+// A FolderWatcher can be used to watch a folder for modified or moved items.
 type FolderWatcher struct {
 	changeDetails chan *FolderChange
 
@@ -31,7 +34,6 @@ type FolderWatcher struct {
 	recurse  bool
 	skipFile func(path string) bool
 
-	debug         bool
 	folder        string
 	running       bool
 	wasStopped    bool
@@ -40,6 +42,10 @@ type FolderWatcher struct {
 	previousEntries []string
 }
 
+// NewFolderWatcher creates a new folder watcher for the given folder path.
+// The recurse flag indicates whether the watcher shall include sub folders of the the given folder path.
+// The skipFile expression can be used to exclude certains files or folders.
+// The check interval in seconds defines how often the watcher shall check for changes (recommended: 1 - n seconds).
 func NewFolderWatcher(folderPath string, recurse bool, skipFile func(path string) bool, checkIntervalInSeconds int) *FolderWatcher {
 
 	if checkIntervalInSeconds < 1 {
@@ -57,7 +63,6 @@ func NewFolderWatcher(folderPath string, recurse bool, skipFile func(path string
 		recurse:  recurse,
 		skipFile: skipFile,
 
-		debug:         true,
 		folder:        folderPath,
 		checkInterval: time.Duration(checkIntervalInSeconds),
 	}
@@ -67,22 +72,27 @@ func (folderWatcher *FolderWatcher) String() string {
 	return fmt.Sprintf("Folderwatcher %q", folderWatcher.folder)
 }
 
+// Modified returns a channel indicating if the current folder has been modified.
 func (folderWatcher *FolderWatcher) Modified() chan bool {
 	return folderWatcher.modified
 }
 
+// Moved returns a channel indicating if the current folder has been moved.
 func (folderWatcher *FolderWatcher) Moved() chan bool {
 	return folderWatcher.moved
 }
 
+// Stopped returns a channel indicating if current folder watcher stopped.
 func (folderWatcher *FolderWatcher) Stopped() chan bool {
 	return folderWatcher.stopped
 }
 
+// ChangeDetails returns a model containing all changed during a given change interval.
 func (folderWatcher *FolderWatcher) ChangeDetails() chan *FolderChange {
 	return folderWatcher.changeDetails
 }
 
+// Start starts the watch process.
 func (folderWatcher *FolderWatcher) Start() {
 	folderWatcher.running = true
 	sleepInterval := time.Second * folderWatcher.checkInterval
@@ -192,15 +202,18 @@ func (folderWatcher *FolderWatcher) Start() {
 	}()
 }
 
+// Stop stops the watch process.
 func (folderWatcher *FolderWatcher) Stop() {
 	log("Stopping folder watcher %q", folderWatcher.String())
 	folderWatcher.wasStopped = true
 }
 
+// IsRunning returns a flag indicating whether the watcher is currently running.
 func (folderWatcher *FolderWatcher) IsRunning() bool {
 	return folderWatcher.running
 }
 
+// getPreviousEntryList returns the entry list of the last watcher-run.
 func (folderWatcher *FolderWatcher) getPreviousEntryList() []string {
 	return folderWatcher.previousEntries
 }
@@ -210,6 +223,9 @@ func (folderWatcher *FolderWatcher) captureEntryList(list []string) {
 	folderWatcher.previousEntries = list
 }
 
+// getFolderEntries returns a list of all entries for the given direcotry path.
+// The recurse flag indicates whether the watcher shall include sub folders of the the given folder path.
+// The skipFile expression can be used to exclude certains files or folders.
 func getFolderEntries(directory string, recurse bool, skipFile func(path string) bool) ([]string, error) {
 
 	// the return array

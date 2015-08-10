@@ -4,11 +4,13 @@
 
 package fswatch
 
-func sliceContainsElement(list []string, elem string) bool {
-	for _, t := range list {
-		if t == elem {
+// sliceContainsElement returns true if the specified list of strings contains the given text element.
+func sliceContainsElement(listOfStrings []string, textElement string) bool {
+	for _, t := range listOfStrings {
+		if t == textElement {
 			return true
 		}
 	}
+
 	return false
 }
