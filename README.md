@@ -67,17 +67,16 @@ go func() {
 		recurse,
 		skipDotFilesAndFolders,
 		checkIntervalInSeconds
-	).Start()
+	)
+	
+	folderWatcher.Start()
 
 	for folderWatcher.IsRunning() {
 
 		select {
 
-		case <-folderWatcher.New():
-			fmt.Println("New items detected")
-
 		case <-folderWatcher.Modified():
-			fmt.Println("Modified items detected")
+			fmt.Println("New or modified items detected")
 
 		case <-folderWatcher.Moved():
 			fmt.Println("Items have been moved")
