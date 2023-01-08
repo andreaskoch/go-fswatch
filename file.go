@@ -50,7 +50,7 @@ func NewFileWatcher(filePath string, checkIntervalInSeconds int) *FileWatcher {
 		stopped:  make(chan bool),
 
 		file:          filePath,
-		checkInterval: time.Duration(checkIntervalInSeconds),
+		checkInterval: time.Duration(checkIntervalInSeconds * 1000000000), // base unit is nanoseconds
 	}
 }
 
